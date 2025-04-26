@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>SSE Example</title>
+  <style>
+    .message-container {
+      max-width: 800px;
+      margin: 20px auto;
+      padding: 20px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      background: #f9f9f9;
+    }
+
+    .chat-container {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin-top: 20px;
+    }
+
+    .message {
+      max-width: 70%;
+      padding: 12px 15px;
+      border-radius: 15px;
+      position: relative;
+      background: #007bff;
+      color: white;
+      align-self: flex-start;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .message::before {
+      content: '';
+      position: absolute;
+      left: -8px;
+      top: 50%;
+      transform: translateY(-50%);
+      border-style: solid;
+      border-width: 8px 10px 8px 0;
+      border-color: transparent #007bff transparent transparent;
+    }
+
+    [v-cloak] {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <div class="message-container">
+      <h2>流式响应示例</h2>
+      <button @click="startStream"
+        style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+        开始接收数据
+      </button>
+      <div class="chat-container">
+        <div v-cloak v-for="(message, index) in messages" :key="index" class="message">
+          {{ message }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/axios@1.9.0/dist/axios.min.js"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script>
+    const { createApp, ref } = Vue;
+
+    createApp({
+      setup() {
+        const messages = ref([]);
+        const currentMessage = ref('');
+        const url = '/events';
+
+        const typeWriter = (text, delay = 100) => {
+          return new Promise(resolve => {
+            let index = 0;
+            const timer = setInterval(() => {
+              if (index < text.length) {
+                const char = text[index];
+                currentMessage.value += char;
+                messages.value[messages.value.length - 1] = currentMessage.value;
+                index++;
+              } else {
+                clearInterval(timer);
+                resolve();
+              }
+            }, delay);
+          });
+        };
+
+        const startStream = async () => {
+          currentMessage.value = '';
+          messages.value.push('');
+
+          const res = await fetch(url);
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder('utf-8');
+
+          const read = async () => {
+            const { done, value } = await reader.read();
+            if (!done) {
+              const res = decoder.decode(value, { stream: true });
+              const newMsg = JSON.parse(res).message;
+              await typeWriter(newMsg, 25);
+              read();
+            }
+          }
+          read();
+        }
+
+        return {
+          messages,
+          startStream
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+
+</html>
