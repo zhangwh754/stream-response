@@ -96,34 +96,49 @@
         };
 
         const startStream = async () => {
-          currentMessage.value = '';
-          messages.value = ['加载中...'];
+          try {
+            currentMessage.value = '';
+            messages.value = ['加载中...'];
 
-          const res = await fetch(url);
-          const reader = res.body.getReader();
-          const decoder = new TextDecoder('utf-8');
-
-          const read = async () => {
-            const { done, value } = await reader.read();
-            if (!done) {
-              const res = JSON.parse(decoder.decode(value, { stream: true }));
-              const newMsg = res.message;
-              const isEnd = res.isEnd;
-
-              // 清除当前的"加载中..."
-              messages.value[0] = messages.value[0].slice(0, -6)
-              currentMessage.value = messages.value[0];
-
-              await typeWriter(newMsg, 25);
-
-              // 如果还有更多数据，添加"加载中..."
-              if (isEnd) return
-              messages.value[0] += '加载中...';
-
-              read();
+            const res = await fetch(url);
+            if (!res.ok) {
+              throw new Error(`HTTP error! status: ${res.status}`);
             }
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+
+            const read = async () => {
+              try {
+                const { done, value } = await reader.read();
+                if (!done) {
+                  const res = JSON.parse(decoder.decode(value, { stream: true }));
+                  const newMsg = res.message;
+                  const isEnd = res.isEnd;
+
+                  // 清除当前的"加载中..."
+                  messages.value[0] = messages.value[0].slice(0, -6)
+                  currentMessage.value = messages.value[0];
+
+                  await typeWriter(newMsg, 25);
+
+                  // 如果还有更多数据，添加"加载中..."和进度
+                  if (!isEnd) {
+                    messages.value[0] += `加载中...`;
+                  }
+
+                  read();
+                }
+              } catch (error) {
+                console.error('Stream reading error:', error);
+                messages.value[0] = '读取数据时发生错误，请重试';
+              }
+            }
+            read();
+          } catch (error) {
+            console.error('Stream failed:', error);
+            messages.value[0] = '连接失败，请重试';
           }
-          read();
         }
 
         return {

@@ -35,6 +35,8 @@ router.get("/events", async (ctx) => {
           time: new Date().toISOString(),
           message: article[currentPart],
           isEnd: currentPart === article.length - 1,
+          total: article.length,           // 添加总段落数
+          current: currentPart + 1         // 添加当前段落序号
         };
         stream.write(`${JSON.stringify(message)}\n`);
         currentPart++;
@@ -44,6 +46,12 @@ router.get("/events", async (ctx) => {
         resolve();
       }
     }, 3000);
+
+    // 添加错误处理
+    ctx.req.on('close', () => {
+      clearInterval(timer);
+      resolve();
+    });
   });
 });
 
