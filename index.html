@@ -97,7 +97,7 @@
 
         const startStream = async () => {
           currentMessage.value = '';
-          messages.value.push('');
+          messages.value = ['加载中...'];
 
           const res = await fetch(url);
           const reader = res.body.getReader();
@@ -106,9 +106,20 @@
           const read = async () => {
             const { done, value } = await reader.read();
             if (!done) {
-              const res = decoder.decode(value, { stream: true });
-              const newMsg = JSON.parse(res).message;
+              const res = JSON.parse(decoder.decode(value, { stream: true }));
+              const newMsg = res.message;
+              const isEnd = res.isEnd;
+
+              // 清除当前的"加载中..."
+              messages.value[0] = messages.value[0].slice(0, -6)
+              currentMessage.value = messages.value[0];
+
               await typeWriter(newMsg, 25);
+
+              // 如果还有更多数据，添加"加载中..."
+              if (isEnd) return
+              messages.value[0] += '加载中...';
+
               read();
             }
           }
