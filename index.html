@@ -108,32 +108,97 @@
             const reader = res.body.getReader();
             const decoder = new TextDecoder('utf-8');
 
+            let buffer = ''; // 用于存储未处理完的数据
+
             const read = async () => {
               try {
                 const { done, value } = await reader.read();
-                if (!done) {
-                  const res = JSON.parse(decoder.decode(value, { stream: true }));
-                  const newMsg = res.message;
-                  const isEnd = res.isEnd;
-
-                  // 清除当前的"加载中..."
-                  messages.value[0] = messages.value[0].slice(0, -6)
-                  currentMessage.value = messages.value[0];
-
-                  await typeWriter(newMsg, 25);
-
-                  // 如果还有更多数据，添加"加载中..."和进度
-                  if (!isEnd) {
-                    messages.value[0] += `加载中...`;
-                  }
-
-                  read();
+                if (done) {
+                  return; // 流结束
                 }
+
+                // 解码二进制数据并添加到缓冲区
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+
+                // 处理缓冲区中的所有完整消息
+                let processedData = processSSEData(buffer);
+
+                // 更新缓冲区，移除已处理的部分
+                buffer = processedData.remainingBuffer;
+
+                // 处理提取的JSON数据
+                if (processedData.jsonDataList.length > 0) {
+                  for (const jsonData of processedData.jsonDataList) {
+                    try {
+                      const res = JSON.parse(jsonData);
+                      const newMsg = res.message;
+                      const isEnd = res.isEnd;
+
+
+                      // 清除当前的"加载中..."
+                      if (messages.value[0].endsWith('加载中...')) {
+                        messages.value[0] = messages.value[0].slice(0, -6);
+                      }
+                      currentMessage.value = messages.value[0];
+
+                      await typeWriter(newMsg, 25);
+
+                      // 如果还有更多数据，添加"加载中..."
+                      if (!isEnd) {
+                        messages.value[0] += `加载中...`;
+                      }
+                    } catch (jsonError) {
+                      console.error('JSON解析错误:', jsonError, '原始数据:', jsonData);
+                    }
+                  }
+                }
+
+                // 继续读取
+                read();
               } catch (error) {
                 console.error('Stream reading error:', error);
+                console.error('Error details:', error.message);
                 messages.value[0] = '读取数据时发生错误，请重试';
               }
+            };
+
+            // 处理SSE格式数据的函数
+            function processSSEData(data) {
+              const jsonDataList = [];
+              const lines = data.split('\n');
+              let remainingBuffer = '';
+              let currentData = '';
+
+              for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+
+                // 空行表示一个事件的结束
+                if (line === '') {
+                  if (currentData) {
+                    jsonDataList.push(currentData);
+                    currentData = '';
+                  }
+                  continue;
+                }
+
+                // 处理data字段
+                if (line.startsWith('data: ')) {
+                  currentData = line.substring(6);
+                }
+              }
+
+              // 处理最后一个不完整的行（可能是下一个事件的开始）
+              if (lines.length > 0 && !lines[lines.length - 1].endsWith('\n')) {
+                remainingBuffer = lines[lines.length - 1];
+              }
+
+              return {
+                jsonDataList,
+                remainingBuffer
+              };
             }
+
             read();
           } catch (error) {
             console.error('Stream failed:', error);

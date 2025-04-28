@@ -34,21 +34,22 @@ router.get("/events", async (ctx) => {
         const message = {
           time: new Date().toISOString(),
           message: article[currentPart],
+          misc: Array.from({ length: 10000 }, () => Math.random()).toString(),
           isEnd: currentPart === article.length - 1,
-          total: article.length,           // 添加总段落数
-          current: currentPart + 1         // 添加当前段落序号
+          total: article.length, // 添加总段落数
+          current: currentPart + 1, // 添加当前段落序号
         };
-        stream.write(`${JSON.stringify(message)}\n`);
+        stream.write(`data: ${JSON.stringify(message)}\n`);
         currentPart++;
       } else {
         clearInterval(timer);
         stream.end();
         resolve();
       }
-    }, 3000);
+    }, 1000);
 
     // 添加错误处理
-    ctx.req.on('close', () => {
+    ctx.req.on("close", () => {
       clearInterval(timer);
       resolve();
     });
